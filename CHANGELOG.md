@@ -11,4 +11,4 @@
 - Limited image history to 5 MB per image.
 - Reduced background work with 1 second clipboard polling and delayed disk writes.
 - Added install, build, and uninstall scripts.
-
+- Positioned the history window near the mouse pointer with screen-edge clamping.

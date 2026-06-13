@@ -8,13 +8,14 @@ It keeps the last few hours of clipboard text and small images, opens with `Comm
 
 - Native Swift + AppKit app, no Electron or background runtime.
 - Global shortcut: `Command-Shift-V`.
-- Simple clipboard history window with single-click selection.
+- Simple clipboard history window near the mouse pointer with single-click selection.
 - Text and small image support.
 - Local-only history storage.
 - Keeps at most 50 items from the last 6 hours.
 - Ignores images larger than 5 MB.
 - Polls the clipboard every 1 second using `NSPasteboard.changeCount`.
 - Delays disk writes briefly to avoid writing on every rapid copy.
+- Sizes the history window to the current item count and keeps it inside the visible screen area.
 
 ## Requirements
 

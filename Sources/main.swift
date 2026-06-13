@@ -8,6 +8,10 @@ private let historyTTL: TimeInterval = 6 * 60 * 60
 private let clipboardPollInterval: TimeInterval = 1.0
 private let delayedSaveInterval: TimeInterval = 1.5
 private let maxImageBytes = 5 * 1024 * 1024
+private let historyWindowWidth: CGFloat = 460
+private let historyWindowMinHeight: CGFloat = 88
+private let historyWindowMaxRows = 8
+private let historyWindowPadding: CGFloat = 12
 
 final class AppLog {
     static let shared = AppLog()
@@ -319,17 +323,36 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         AppLog.shared.write("window_show item_count=\(visibleItems.count)")
         guard let window else { return }
         AppLog.shared.write("window_class=\(String(describing: type(of: window))) visible_before=\(window.isVisible)")
-        let rowCount = max(1, min(visibleItems.count, 8))
-        window.setContentSize(NSSize(width: 520, height: CGFloat(rowCount * 42 + 16)))
-        if let screenFrame = NSScreen.main?.visibleFrame {
-            let frame = window.frame
-            let x = screenFrame.midX - frame.width / 2
-            let y = screenFrame.maxY - frame.height - 90
-            window.setFrameOrigin(NSPoint(x: x, y: y))
-        }
+        window.setFrame(calculatedFrameNearMouse(), display: true)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         AppLog.shared.write("window_visible_after=\(window.isVisible) key=\(window.isKeyWindow)")
+    }
+
+    private func calculatedFrameNearMouse() -> NSRect {
+        let rowCount = max(1, min(visibleItems.count, historyWindowMaxRows))
+        let contentHeight = max(historyWindowMinHeight, CGFloat(rowCount) * tableView.rowHeight + 16)
+        let contentSize = NSSize(width: historyWindowWidth, height: contentHeight)
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
+        guard let visibleFrame = screen?.visibleFrame else {
+            return NSRect(origin: mouse, size: contentSize)
+        }
+
+        var x = mouse.x + historyWindowPadding
+        var y = mouse.y - contentSize.height - historyWindowPadding
+
+        if x + contentSize.width > visibleFrame.maxX {
+            x = mouse.x - contentSize.width - historyWindowPadding
+        }
+        if y < visibleFrame.minY {
+            y = mouse.y + historyWindowPadding
+        }
+
+        x = min(max(x, visibleFrame.minX + historyWindowPadding), visibleFrame.maxX - contentSize.width - historyWindowPadding)
+        y = min(max(y, visibleFrame.minY + historyWindowPadding), visibleFrame.maxY - contentSize.height - historyWindowPadding)
+
+        return NSRect(origin: NSPoint(x: x, y: y), size: contentSize)
     }
 
     private func buildUI() {
