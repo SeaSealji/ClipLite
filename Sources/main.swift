@@ -474,7 +474,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         AppLog.shared.write("started bundle=\(Bundle.main.bundleIdentifier ?? "unknown") path=\(Bundle.main.bundlePath)")
-        NSApp.setActivationPolicy(.regular)
+        NSApp.setActivationPolicy(.accessory)
         installMainMenu()
         watcher.start()
         installStatusItem()
@@ -487,10 +487,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyOK = hotKeyCenter?.register() == true
         AppLog.shared.write("hotkey_registered=\(hotKeyOK)")
         rebuildMenu()
-        DispatchQueue.main.async { [weak self] in
-            NSApp.activate(ignoringOtherApps: true)
-            self?.showHistory()
-        }
+        AppLog.shared.write("ready accessory_app=true")
     }
 
     private func ensureSingleInstance() -> Bool {

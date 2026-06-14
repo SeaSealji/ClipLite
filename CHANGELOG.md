@@ -12,3 +12,4 @@
 - Reduced background work with 1 second clipboard polling and delayed disk writes.
 - Added install, build, and uninstall scripts.
 - Positioned the history window near the mouse pointer with screen-edge clamping.
+- Switched ClipLite back to menu bar utility mode so it does not show a Dock icon.

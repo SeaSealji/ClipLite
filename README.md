@@ -3,10 +3,12 @@
 ClipLite is a tiny native macOS clipboard history app built with Swift and AppKit.
 
 It keeps the last few hours of clipboard text and small images, opens with `Command-Shift-V`, and lets you click an item to copy it back and paste into the app you were using.
+It runs as a lightweight menu bar utility and does not show a Dock icon.
 
 ## Features
 
 - Native Swift + AppKit app, no Electron or background runtime.
+- Menu bar utility mode without a Dock icon.
 - Global shortcut: `Command-Shift-V`.
 - Simple clipboard history window near the mouse pointer with single-click selection.
 - Text and small image support.
