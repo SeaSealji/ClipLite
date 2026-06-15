@@ -12,6 +12,9 @@ private let historyWindowWidth: CGFloat = 460
 private let historyWindowMinHeight: CGFloat = 88
 private let historyWindowMaxRows = 8
 private let historyWindowPadding: CGFloat = 12
+private let textRowHeight: CGFloat = 42
+private let imageRowHeight: CGFloat = 86
+private let imagePreviewSize: CGFloat = 64
 
 final class AppLog {
     static let shared = AppLog()
@@ -281,6 +284,67 @@ final class ClickSelectTableView: NSTableView {
     }
 }
 
+final class HistoryCellView: NSTableCellView {
+    private let previewView = NSImageView()
+    private let titleLabel = NSTextField(labelWithString: "")
+    private var titleLeadingTextConstraint: NSLayoutConstraint?
+    private var titleLeadingImageConstraint: NSLayoutConstraint?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        buildUI()
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    func configure(with item: HistoryItem) {
+        switch item.payload {
+        case .text:
+            previewView.isHidden = true
+            titleLeadingImageConstraint?.isActive = false
+            titleLeadingTextConstraint?.isActive = true
+            titleLabel.stringValue = item.title
+        case .image(let data):
+            previewView.isHidden = false
+            titleLeadingTextConstraint?.isActive = false
+            titleLeadingImageConstraint?.isActive = true
+            previewView.image = NSImage(data: data)
+            titleLabel.stringValue = item.title
+        }
+    }
+
+    private func buildUI() {
+        previewView.imageScaling = .scaleProportionallyUpOrDown
+        previewView.wantsLayer = true
+        previewView.layer?.cornerRadius = 6
+        previewView.layer?.borderWidth = 1
+        previewView.layer?.borderColor = NSColor.separatorColor.cgColor
+        previewView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(previewView)
+
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.font = .systemFont(ofSize: 13)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+
+        titleLeadingTextConstraint = titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8)
+        titleLeadingImageConstraint = titleLabel.leadingAnchor.constraint(equalTo: previewView.trailingAnchor, constant: 10)
+        titleLeadingImageConstraint?.isActive = true
+
+        NSLayoutConstraint.activate([
+            previewView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            previewView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            previewView.widthAnchor.constraint(equalToConstant: imagePreviewSize),
+            previewView.heightAnchor.constraint(equalToConstant: imagePreviewSize),
+
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+}
+
 final class HistoryWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     private let store: HistoryStore
     private let onSelect: (HistoryItem) -> Void
@@ -288,6 +352,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let scrollView = NSScrollView()
     private let emptyLabel = NSTextField(labelWithString: "Clipboard history is empty")
     private var visibleItems: [HistoryItem] = []
+    private var outsideClickMonitor: Any?
 
     init(store: HistoryStore, onSelect: @escaping (HistoryItem) -> Void) {
         self.store = store
@@ -314,6 +379,10 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         reload()
     }
 
+    deinit {
+        removeOutsideClickMonitor()
+    }
+
     required init?(coder: NSCoder) {
         nil
     }
@@ -326,12 +395,16 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         window.setFrame(calculatedFrameNearMouse(), display: true)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        installOutsideClickMonitor()
         AppLog.shared.write("window_visible_after=\(window.isVisible) key=\(window.isKeyWindow)")
     }
 
     private func calculatedFrameNearMouse() -> NSRect {
         let rowCount = max(1, min(visibleItems.count, historyWindowMaxRows))
-        let contentHeight = max(historyWindowMinHeight, CGFloat(rowCount) * tableView.rowHeight + 16)
+        let rowsHeight = visibleItems.prefix(rowCount).reduce(CGFloat(0)) { total, item in
+            total + rowHeight(for: item)
+        }
+        let contentHeight = max(historyWindowMinHeight, rowsHeight + 16)
         let contentSize = NSSize(width: historyWindowWidth, height: contentHeight)
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
@@ -355,6 +428,26 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         return NSRect(origin: NSPoint(x: x, y: y), size: contentSize)
     }
 
+    private func installOutsideClickMonitor() {
+        removeOutsideClickMonitor()
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            guard let self, let window = self.window, window.isVisible else { return }
+            let clickPoint = event.locationInWindow
+            if !window.frame.contains(clickPoint) {
+                AppLog.shared.write("hide_history outside_click")
+                window.orderOut(nil)
+                self.removeOutsideClickMonitor()
+            }
+        }
+    }
+
+    private func removeOutsideClickMonitor() {
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
+    }
+
     private func buildUI() {
         guard let content = window?.contentView else { return }
         content.wantsLayer = true
@@ -364,7 +457,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         column.title = "History"
         tableView.addTableColumn(column)
         tableView.headerView = nil
-        tableView.rowHeight = 42
+        tableView.rowHeight = textRowHeight
         tableView.dataSource = self
         tableView.delegate = self
         tableView.onSingleClickRow = { [weak self] row in
@@ -400,6 +493,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             }
             if event.keyCode == kVK_Escape {
                 self.window?.orderOut(nil)
+                self.removeOutsideClickMonitor()
                 return nil
             }
             return event
@@ -421,14 +515,16 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         visibleItems.count
     }
 
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        rowHeight(for: visibleItems[row])
+    }
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let identifier = NSUserInterfaceItemIdentifier("cell")
         let item = visibleItems[row]
-        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTextField ?? NSTextField(labelWithString: "")
+        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? HistoryCellView ?? HistoryCellView()
         cell.identifier = identifier
-        cell.lineBreakMode = .byTruncatingTail
-        cell.font = .systemFont(ofSize: 13)
-        cell.stringValue = item.title
+        cell.configure(with: item)
         return cell
     }
 
@@ -449,11 +545,22 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             if let first = visibleItems.first {
                 onSelect(first)
                 window?.orderOut(nil)
+                removeOutsideClickMonitor()
             }
             return
         }
         onSelect(visibleItems[row])
         window?.orderOut(nil)
+        removeOutsideClickMonitor()
+    }
+
+    private func rowHeight(for item: HistoryItem) -> CGFloat {
+        switch item.payload {
+        case .text:
+            return textRowHeight
+        case .image:
+            return imageRowHeight
+        }
     }
 }
 

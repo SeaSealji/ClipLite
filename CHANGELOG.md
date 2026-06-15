@@ -13,3 +13,5 @@
 - Added install, build, and uninstall scripts.
 - Positioned the history window near the mouse pointer with screen-edge clamping.
 - Switched ClipLite back to menu bar utility mode so it does not show a Dock icon.
+- Added outside-click dismissal for the history window.
+- Added thumbnail previews for image history entries.
